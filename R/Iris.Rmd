@@ -1,0 +1,163 @@
+---
+title: "Expolring Iris Dataset with Caret"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+First, We'll be loading the relevant packages.
+
+```{r}
+library(caret)
+library(ellipse)
+library(scales)
+```
+
+Then, the dataset is loaded. (Note: The Iris dataset is included with R.)
+```{r}
+data("iris")
+dataset <- iris
+```
+
+Now we want to set aside some of the data to test the model after it is trained.
+Every Peice of data is not used for training the model.
+The following code will set aside 20% of data for testing and 80% for training the model.
+```{r}
+validation_index <- createDataPartition(dataset$Species, p = 0.80, list = F)
+# Selecting 20% of data for testing
+validation <- dataset[-validation_index,]
+# Using the rest of 80% data for training the model.
+dataset <- dataset[validation_index,]
+```
+
+Now we'll take a look at the dataset.
+
+1. Dimensions of the dataset
+```{r}
+dim(dataset)
+```
+2. Types of attributes
+```{r}
+sapply(dataset, class)
+```
+3. Inspect a first few rows of the data.
+```{r}
+head(dataset)
+```
+4. List the levels for the class
+```{r}
+levels(dataset$Species)
+```
+5. Summarize the class distribution
+```{r}
+percentage <- prop.table(table(dataset$Species)) * 100
+cbind(freq = table(dataset$Species), percentage = percentage)
+```
+We can see that the three of levels 'setosa', 'versicolor' and 'virginica' have equal amount of entries. (33.333% Each)
+6. A summary of dataset
+```{r}
+summary(dataset)
+```
+## Visualizing Dataset
+1. Univariate Plots (Plots of each variable.)
+Splitting dataset into input attributes(X) and target attributes(y).
+```{r}
+X <- dataset[,1:4]
+y <- dataset[,5]
+```
+Since all values of X are numeric, Box and whiskers plots are created for each.
+```{r}
+par(mfrow=c(1,4))
+for (i in 1:4) {
+  boxplot(X[,i], main=names(iris)[i])
+}
+```
+Creating a barplot for taget attributes. There should be three even bars.
+```{r}
+plot(y)
+```
+2. Multivariate Plots
+Scatterplots of all pair of attributes and color the points by class.
++ Scatterplot matrix
+```{r}
+featurePlot(x=X, y=y,plot = "ellipse")
+```
++ Box and whiskers plot for each varibale, separated for each class.
+```{r}
+featurePlot(x=X, y=y, plot = "box")
+```
++ Probability density plots for each attribute, to understand the distribution.
+```{r}
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+featurePlot(x=X, y=y, plot="density", scales=scales)
+```
+## Evaluating algorithms
+Run algorithms using 10-fold cross validation. This will split our dataset into 10. Train in 9 and test in 1.
+```{r}
+control <- trainControl(method = "cv", number = 10)
+```
+We'll be evaluating the following algorithms.
+
+1. Linear Discriminant Analysis(LDA)
+2. Classification and Regression Trees(CART)
+3. k-Nearest Neighbors(kNN)
+4. Support Vector Machines(SVM) with a linear kernel
+5. Random Forest(RF)
+
+These algorithms contain __simple linear(LDA)__, __nonlinear(CART, kNN)__ and __complex  nonlinear(SVM, RF)__ methods.
+Random number is resetted each time to ensure that the evaluation of each algorithm is done on the same data splits. It makes data directly comparable.
+
+I. Linear Algorithms
+```{r}
+# LDA
+set.seed(7)
+fit.lda <- train(Species~., data = dataset, method = "lda", metric = "Accuracy", trControl = control)
+```
+
+II. Nonlinear Algorithms
+```{r}
+# CART
+set.seed(7)
+fit.cart <- train(Species~., data = dataset, method = "rpart", metric = "Accuracy", trControl = control)
+# kNN
+set.seed(7)
+fit.knn <- train(Species~., data = dataset, method = "knn", metric = "Accuracy", trControl = control)
+
+```
+
+III. Advanced ALgorithms
+```{r}
+# SVM
+set.seed(7)
+fit.svm <- train(Species~., data = dataset, method = "svmRadial", metric = "Accuracy", trControl = control)
+# Random Forest
+set.seed(7)
+fit.rf <- train(Species~., data = dataset, method = "rf", metric = "Accuracy", trControl = control)
+
+```
+## Comparing the models
+Now we have 5 models and accuracy estimations for each of them. They can be compared and then the best one can be selected.
+A list of created models is summarized.
+```{r}
+results <- resamples(list(lda = fit.lda, cart = fit.cart, knn = fit.knn, svm = fit.svm, rf = fit.rf))
+summary(results)
+
+```
+Comapre accuracy of models using a plot
+```{r}
+dotplot(results)
+```
+As you can see, The best algorithm with the highest accuracy is LDA.
+
+Summarize results for LDA model
+```{r}
+print(fit.lda)
+```
+Making predictions and estimating skill of LDA on the validation dataset.
+```{r}
+predictions <- predict(fit.lda, validation)
+confusionMatrix(predictions, validation$Species)
+```
+As you can see, the LDA algorithm's accuracy is 100%. This model can be safely assumed as a good model to use with other real-life flower samples.
